@@ -58,18 +58,20 @@ def main():
         print(f"[TRAIN] GPU: {torch.cuda.get_device_name()}", flush=True)
         print(f"[TRAIN] VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", flush=True)
 
-    # Create vectorized environment (parallel cars)
-    n_envs = 16 if device == "cuda" else 4
+    # MLP policy runs better on CPU (SB3 recommendation)
+    # GPU is for CNN policies with image observations
+    train_device = "cpu"
+    n_envs = 16
     print(f"[TRAIN] Creating {n_envs} parallel environments...", flush=True)
+    print(f"[TRAIN] Training device: {train_device} (MLP policy — CPU is faster than GPU for this)", flush=True)
 
     env = make_vec_env(RacingEnv, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
 
-    # PPO with GPU
     model = PPO(
         "MlpPolicy",
         env,
         verbose=1,
-        device=device,
+        device=train_device,
         learning_rate=3e-4,
         n_steps=2048,
         batch_size=256,
@@ -81,7 +83,7 @@ def main():
         policy_kwargs={
             "net_arch": [256, 256],  # 2 hidden layers, 256 neurons each
         },
-        tensorboard_log="./logs/",
+        # tensorboard_log="./logs/",  # enable when tensorboard is installed
     )
 
     print(f"[TRAIN] Policy network: {model.policy}", flush=True)
