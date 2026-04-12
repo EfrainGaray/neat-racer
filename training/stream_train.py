@@ -128,7 +128,7 @@ class StreamCallback(BaseCallback):
         self._build_track_surface()
 
     def _on_training_start(self):
-        self._init_render()
+        pass  # init done in main() before model.learn()
 
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
