@@ -66,12 +66,8 @@ class STKEnv(gym.Env):
         race_config.track = self.track_name
         race_config.num_kart = self.num_karts
         race_config.laps = self.laps
-        race_config.players.append(
-            pystk2.PlayerConfig(
-                controller=pystk2.PlayerConfig.Controller.PLAYER_CONTROL,
-                team=0,
-            )
-        )
+        # Default player already exists in players[0] — just set controller
+        race_config.players[0].controller = pystk2.PlayerConfig.Controller.PLAYER_CONTROL
 
         self._race = pystk2.Race(race_config)
         self._race.start()
