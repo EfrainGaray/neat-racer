@@ -34,7 +34,6 @@ class STKEnv(gym.Env):
         self.track_name = track
         self.num_karts = num_karts
         self.laps = laps
-        self._initialized = False
         self._race = None
         self._steps = 0
         self._max_steps = 1500
@@ -56,18 +55,8 @@ class STKEnv(gym.Env):
             low=-np.inf, high=np.inf, shape=(11,), dtype=np.float32,
         )
 
-    def _init_stk(self):
-        if self._initialized:
-            return
-        config = pystk2.GraphicsConfig.hd()
-        config.screen_width = WIDTH
-        config.screen_height = HEIGHT
-        pystk2.init(config)
-        self._initialized = True
-
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self._init_stk()
 
         if self._race is not None:
             self._race.stop()
@@ -282,14 +271,20 @@ def main():
     print("[STK] SuperTuxKart PPO Training + Live Stream", flush=True)
     print(f"[STK] Resolution: {WIDTH}x{HEIGHT}", flush=True)
 
-    # Available tracks
-    tracks = pystk2.list_tracks()
-    print(f"[STK] Available tracks: {len(tracks)}", flush=True)
-    print(f"[STK] Using: lighthouse", flush=True)
-
     proxy_sock = connect_proxy()
 
-    env = STKEnv(track="lighthouse", num_karts=5, laps=1)
+    # Init pystk2 graphics before creating env
+    gfx = pystk2.GraphicsConfig.hd()
+    gfx.screen_width = WIDTH
+    gfx.screen_height = HEIGHT
+    pystk2.init(gfx)
+
+    tracks = pystk2.list_tracks()
+    print(f"[STK] Available tracks: {len(tracks)}", flush=True)
+    track = "lighthouse" if "lighthouse" in tracks else tracks[0]
+    print(f"[STK] Using: {track}", flush=True)
+
+    env = STKEnv(track=track, num_karts=5, laps=1)
     env = gym.wrappers.TimeLimit(env, max_episode_steps=1500)
 
     model = PPO(
