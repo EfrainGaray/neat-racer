@@ -379,8 +379,25 @@ def main():
         policy_kwargs={"net_arch": [256, 256]},
     )
 
+    # Init pygame + proxy BEFORE creating callback
+    os.environ["SDL_VIDEODRIVER"] = "offscreen"
+    pygame.init()
+    _surface = pygame.display.set_mode((WIDTH, HEIGHT))
+    _clock = pygame.time.Clock()
+    _proxy = connect_proxy()
+    _stars = make_stars()
+    print(f"[STREAM] Pygame init OK, proxy={'connected' if _proxy else 'FAILED'}", flush=True)
+
     callback = StreamCallback(track)
-    callback._init_render()
+    callback.surface = _surface
+    callback.clock = _clock
+    callback.proxy_sock = _proxy
+    callback.stars = _stars
+    callback.font = pygame.font.SysFont("monospace", 20, bold=True)
+    callback.font_sm = pygame.font.SysFont("monospace", 14, bold=True)
+    callback.font_xs = pygame.font.SysFont("monospace", 11)
+    callback._build_track_surface()
+    callback._inited = True
 
     print("[STREAM] Training + rendering live (callback mode)...", flush=True)
     try:
