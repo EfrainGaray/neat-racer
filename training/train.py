@@ -56,7 +56,7 @@ def main():
     print(f"[TRAIN] Device: {device}", flush=True)
     if device == "cuda":
         print(f"[TRAIN] GPU: {torch.cuda.get_device_name()}", flush=True)
-        print(f"[TRAIN] VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB", flush=True)
+        print(f"[TRAIN] VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB", flush=True)
 
     # Create vectorized environment (parallel cars)
     n_envs = 16 if device == "cuda" else 4
