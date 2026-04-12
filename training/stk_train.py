@@ -66,12 +66,21 @@ class STKEnv(gym.Env):
         race_config.track = self.track_name
         race_config.num_kart = self.num_karts
         race_config.laps = self.laps
+        # Player-controlled kart
         race_config.players.append(
             pystk2.PlayerConfig(
                 controller=pystk2.PlayerConfig.Controller.PLAYER_CONTROL,
                 team=0,
             )
         )
+        # Add AI karts as players too (they need actions even if AI)
+        for i in range(self.num_karts - 1):
+            race_config.players.append(
+                pystk2.PlayerConfig(
+                    controller=pystk2.PlayerConfig.Controller.AI_CONTROL,
+                    team=0,
+                )
+            )
 
         self._race = pystk2.Race(race_config)
         self._race.start()
@@ -104,7 +113,11 @@ class STKEnv(gym.Env):
         pystk_action.drift = abs(steer) > 0.8  # auto-drift on sharp turns
         pystk_action.nitro = accel_brake > 0.9  # nitro on full throttle
 
-        self._race.step(pystk_action)
+        # Send actions — our kart + AI karts get their own actions
+        actions = [pystk_action]
+        for i in range(1, self.num_karts):
+            actions.append(self._race.get_kart_action(i))
+        self._race.step(actions)
         self._world.update()
 
         obs = self._get_obs()
