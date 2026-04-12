@@ -380,6 +380,7 @@ def main():
     )
 
     callback = StreamCallback(track)
+    callback._init_render()
 
     print("[STREAM] Training + rendering live (callback mode)...", flush=True)
     try:
