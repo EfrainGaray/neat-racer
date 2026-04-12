@@ -123,6 +123,10 @@ class RacingEnv(gym.Env):
             "speed": self.car.speed,
             "distance": self.car.distance_traveled,
             "on_track": on_track,
+            "x": self.car.x,
+            "y": self.car.y,
+            "angle": self.car.angle,
+            "alive": self.car.alive,
         }
 
         return obs, reward, terminated, truncated, info
