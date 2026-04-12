@@ -286,8 +286,8 @@ class StreamCallback(BaseCallback):
         if self.frame % 15 == 0:
             try:
                 pygame.image.save(surf, "/tmp/game_frame.jpg")
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[STREAM] Frame save error: {e}", flush=True)
 
         self.clock.tick(FPS)
 
