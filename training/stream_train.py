@@ -13,6 +13,7 @@ import pygame
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.callbacks import BaseCallback
 
 from game.racing_env import RacingEnv
 from game.track import make_oval_track
@@ -89,10 +90,11 @@ def connect_proxy(retries=10, delay=2.0):
 
 
 # ── Renderer ──────────────────────────────────────────────────────────────────
-class StreamCallback:
-    """Renders training to stream. Called manually from training loop."""
+class StreamCallback(BaseCallback):
+    """SB3 callback that renders training to stream on every step."""
 
     def __init__(self, track):
+        super().__init__()
         self.track = track
         self.proxy_sock = None
         self.surface = None
@@ -103,18 +105,17 @@ class StreamCallback:
         self.frame = 0
         self.best_distance = 0
         self.best_laps = 0
-        self.timesteps = 0
         self.episodes = 0
         self.start_time = time.time()
         self.particles = []
         self.stars = []
         self.prev_alive = [True] * N_ENVS
-        self.trail_history = [[] for _ in range(N_ENVS)]  # position trails
+        self.trail_history = [[] for _ in range(N_ENVS)]
 
-        # Pre-compute track glow surfaces
         self._track_surface = None
+        self._inited = False
 
-    def init(self):
+    def _init_render(self):
         os.environ["SDL_VIDEODRIVER"] = "offscreen"
         pygame.init()
         self.surface = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -125,6 +126,19 @@ class StreamCallback:
         self.proxy_sock = connect_proxy()
         self.stars = make_stars()
         self._build_track_surface()
+
+    def _on_training_start(self):
+        self._init_render()
+
+    def _on_step(self) -> bool:
+        infos = self.locals.get("infos", [])
+        self.render(infos)
+        if self.num_timesteps % 60 == 0:
+            self.write_state()
+        return True
+
+    def _on_rollout_end(self):
+        self.episodes += 1
 
     def _build_track_surface(self):
         """Pre-render track to a surface (expensive, do once)."""
@@ -353,43 +367,26 @@ def main():
     print("[STREAM] NEAT Racer — PPO Training + Live Stream", flush=True)
 
     track = make_oval_track()
-    renderer = StreamCallback(track)
-    renderer.init()
 
     print(f"[STREAM] Creating {N_ENVS} parallel environments...", flush=True)
     env = make_vec_env(RacingEnv, n_envs=N_ENVS, vec_env_cls=SubprocVecEnv)
 
     model = PPO(
         "MlpPolicy", env, verbose=0, device="cpu",
-        learning_rate=3e-4, n_steps=512, batch_size=128,
-        n_epochs=4, gamma=0.99, gae_lambda=0.95,
+        learning_rate=3e-4, n_steps=2048, batch_size=256,
+        n_epochs=10, gamma=0.99, gae_lambda=0.95,
         clip_range=0.2, ent_coef=0.01,
         policy_kwargs={"net_arch": [256, 256]},
     )
 
-    print("[STREAM] Training + rendering live...", flush=True)
-    obs = env.reset()
-    step = 0
+    callback = StreamCallback(track)
 
+    print("[STREAM] Training + rendering live (callback mode)...", flush=True)
     try:
-        while True:
-            actions, _ = model.predict(obs, deterministic=False)
-            obs, rewards, dones, infos = env.step(actions)
-
-            # Render every step
-            renderer.render(infos)
-            renderer.timesteps = step
-            step += 1
-
-            # Train periodically (every n_steps)
-            if step % 512 == 0:
-                # Collect rollout and train
-                model.learn(total_timesteps=512, reset_num_timesteps=False)
-                renderer.episodes += 1
-
-            if step % 60 == 0:
-                renderer.write_state()
-
+        model.learn(
+            total_timesteps=100_000_000,
+            callback=callback,
+        )
     except KeyboardInterrupt:
         print("\n[STREAM] Stopped", flush=True)
 
