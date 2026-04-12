@@ -77,6 +77,9 @@ class STKEnv(gym.Env):
         self._race.start()
         self._race.step()
 
+        self._world = pystk2.WorldState()
+        self._world.update()
+
         self._steps = 0
         self._prev_distance = 0
 
@@ -102,27 +105,30 @@ class STKEnv(gym.Env):
         pystk_action.nitro = accel_brake > 0.9  # nitro on full throttle
 
         self._race.step(pystk_action)
+        self._world.update()
 
         obs = self._get_obs()
         self._last_image = self._get_image()
 
         # Reward
-        state = self._race.world_state
-        kart = state.karts[0]
+        kart = self._world.karts[0]
         distance = kart.distance_down_track
-        velocity = np.linalg.norm(kart.velocity)
+        velocity = kart.speed
 
         # Forward progress (main reward)
         progress = distance - self._prev_distance
         if progress < -100:  # crossed finish line
-            progress += state.track_length
+            progress += 1000  # approximate track length
         reward = progress * 0.1
 
         # Speed bonus
-        reward += velocity * 0.01
+        reward += velocity * 0.005
 
-        # Center path penalty
-        reward -= abs(kart.center_path_distance) * 0.005
+        # On-road bonus
+        if kart.is_on_road:
+            reward += 0.05
+        else:
+            reward -= 0.5
 
         self._prev_distance = distance
 
@@ -130,7 +136,7 @@ class STKEnv(gym.Env):
         terminated = False
         truncated = False
 
-        if kart.race_result:  # finished race
+        if kart.has_finished_race:
             reward += 100
             terminated = True
 
@@ -138,27 +144,27 @@ class STKEnv(gym.Env):
             truncated = True
 
         # Stuck detection
-        if velocity < 0.5 and self._steps > 50:
+        if velocity < 0.3 and self._steps > 50:
             reward -= 0.1
 
         info = {
             "distance": distance,
             "velocity": velocity,
-            "laps": getattr(kart, 'lap', 0),
-            "position": getattr(kart, 'position', 0),
+            "laps": kart.finished_laps,
+            "position": kart.position,
+            "on_road": kart.is_on_road,
         }
 
         return obs, reward, terminated, truncated, info
 
     def _get_obs(self):
-        state = self._race.world_state
-        kart = state.karts[0]
+        kart = self._world.karts[0]
         return np.array([
-            kart.distance_down_track / max(state.track_length, 1),
+            kart.distance_down_track / 1000.0,
             kart.velocity[0], kart.velocity[1], kart.velocity[2],
-            kart.front[0], kart.front[1], kart.front[2],
-            kart.center_path_distance,
-            kart.center_path[0], kart.center_path[1], kart.center_path[2],
+            kart.front[0] / 100, kart.front[1] / 100, kart.front[2] / 100,
+            kart.overall_distance / 1000.0,
+            kart.location[0] / 100, kart.location[1] / 100, kart.location[2] / 100,
         ], dtype=np.float32)
 
     def _get_image(self):
