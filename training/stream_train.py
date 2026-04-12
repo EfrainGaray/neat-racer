@@ -132,6 +132,10 @@ class StreamCallback(BaseCallback):
 
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
+        if self.num_timesteps == 1:
+            print(f"[STREAM] First step — infos type: {type(infos)}, len: {len(infos) if infos else 0}", flush=True)
+            if infos:
+                print(f"[STREAM] First info keys: {infos[0].keys() if isinstance(infos[0], dict) else type(infos[0])}", flush=True)
         self.render(infos)
         if self.num_timesteps % 60 == 0:
             self.write_state()
