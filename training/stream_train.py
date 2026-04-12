@@ -310,7 +310,7 @@ class StreamCallback(BaseCallback):
                     self.best_laps = l
 
         lines = [
-            ("STEPS",    f"{self.timesteps:,}",       NEON_CYAN),
+            ("STEPS",    f"{self.num_timesteps:,}",       NEON_CYAN),
             ("ALIVE",    f"{alive_count}/{N_ENVS}",   GREEN if alive_count > 8 else RED),
             ("BEST DIST",f"{self.best_distance:.0f}", YELLOW),
             ("LAPS",     f"{self.best_laps}",         NEON_PINK if self.best_laps > 0 else GRAY),
@@ -356,7 +356,7 @@ class StreamCallback(BaseCallback):
         try:
             with open("/tmp/racer_state.json", "w") as f:
                 json.dump({
-                    "timesteps": self.timesteps,
+                    "timesteps": self.num_timesteps,
                     "episodes": self.episodes,
                     "best_distance": round(self.best_distance, 1),
                     "best_laps": self.best_laps,
