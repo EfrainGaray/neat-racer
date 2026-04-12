@@ -1,0 +1,6 @@
+torch
+stable-baselines3[extra]
+gymnasium
+numpy
+scipy
+pygame

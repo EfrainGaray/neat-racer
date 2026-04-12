@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# PyTorch
+*.pt
+*.pth
+checkpoints/
+logs/
+tensorboard/
+
+# Godot
+.godot/
+*.import
+export_presets.cfg
+
+# Secrets
+.env
+*.env
+
+# OS
+.DS_Store
+
+# Temp
+*.bak
+*.log
