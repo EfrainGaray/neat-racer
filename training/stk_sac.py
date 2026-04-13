@@ -1,6 +1,6 @@
 """
-stk_sac.py — SAC+CNN v3 for SuperTuxKart
-Optimized: low-res render, frame skip, 2x gradient steps, decoupled stream.
+stk_sac.py — SAC+CNN v4 for SuperTuxKart
+Optimized: memory-efficient buffer, 512 batch, 4x gradient steps, full GPU.
 """
 import sys, os, time, json, socket, collections
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -296,7 +296,7 @@ class StreamCallback(BaseCallback):
         draw = ImageDraw.Draw(img)
 
         cx, cy = px + 14, py + 12
-        draw.text((cx, cy), "SAC+CNN v3 | GPU",
+        draw.text((cx, cy), "SAC+CNN v4 | GPU",
                   fill=(140, 0, 255), font=font_title)
         cy += 22
         draw.line([(cx, cy), (px + pw - 14, cy)],
@@ -407,7 +407,7 @@ class StreamCallback(BaseCallback):
                         "elapsed": round(elapsed),
                         "fps": round(fps_train, 1),
                         "avg_reward": round(avg_rew, 2),
-                        "algorithm": "SAC+CNN v3 (GPU)",
+                        "algorithm": "SAC+CNN v4 (GPU)",
                         "game": "SuperTuxKart",
                     }, f)
             except Exception:
@@ -469,13 +469,22 @@ def main():
                     "net_arch": [256, 256],
                     "normalize_images": False,
                 },
+                "buffer_size": 200_000,
+                "batch_size": 512,
+                "gradient_steps": 4,
+                "optimize_memory_usage": True,
+                "replay_buffer_kwargs": {"handle_timeout_termination": False},
             },
         )
         buffer_file = CHECKPOINT_PATH + "_buffer.pkl"
         if os.path.exists(buffer_file):
-            model.load_replay_buffer(buffer_file)
-            print(f"[STK] Restored {model.replay_buffer.size()} experiences",
-                  flush=True)
+            try:
+                model.load_replay_buffer(buffer_file)
+                print(f"[STK] Restored {model.replay_buffer.size()} experiences",
+                      flush=True)
+            except Exception as e:
+                print(f"[STK] Buffer incompatible (optimize_memory changed), "
+                      f"starting fresh buffer: {e}", flush=True)
         else:
             print("[STK] No buffer found", flush=True)
     else:
@@ -486,14 +495,16 @@ def main():
             verbose=1,
             device=device,
             learning_rate=3e-4,
-            buffer_size=100_000,
-            batch_size=256,
+            buffer_size=200_000,
+            batch_size=512,
             learning_starts=1000,
             tau=0.005,
             gamma=0.99,
             train_freq=1,
-            gradient_steps=2,
+            gradient_steps=4,
             target_entropy=-1.0,
+            replay_buffer_kwargs={"handle_timeout_termination": False},
+            optimize_memory_usage=True,
             policy_kwargs={
                 "features_extractor_class": STKCnn,
                 "features_extractor_kwargs": {"features_dim": 256},
