@@ -90,11 +90,19 @@ class STKImageEnv(gym.Env):
         super().reset(seed=seed)
 
         if self._race is not None:
+            # Use restart instead of stop+start — avoids segfault
             try:
-                self._race.stop()
+                self._race.restart()
+                self._race.step()
+                self._world = pystk2.WorldState()
+                self._world.update()
+                self._steps = 0
+                self._prev_distance = 0
+                obs = self._get_obs()
+                self._last_image_full = None
+                return obs, {}
             except Exception:
                 pass
-            del self._race
 
         race_config = pystk2.RaceConfig()
         race_config.track = self.track_name
