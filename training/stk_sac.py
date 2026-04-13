@@ -398,7 +398,7 @@ class StreamCallback(BaseCallback):
                 pass
 
         # Autosave model every 10k steps
-        if self.num_timesteps > 0 and self.num_timesteps % 10_000 == 0:
+        if self.num_timesteps > 0 and self.num_timesteps % 5_000 == 0:
             try:
                 self.model.save(CHECKPOINT_PATH)
                 self.model.save_replay_buffer(CHECKPOINT_PATH + "_buffer")
@@ -460,7 +460,7 @@ def main():
             verbose=1,
             device=device,
             learning_rate=3e-4,
-            buffer_size=30_000,        # ~1.2GB RAM with 84x84 images
+            buffer_size=100_000,       # ~4.2GB RAM with 84x84 images (26GB available)
             batch_size=256,
             learning_starts=5000,      # explore more before training
             tau=0.005,
