@@ -68,9 +68,10 @@ class STKImageEnv(gym.Env):
         self._race = None
         self._world = None
         self._steps = 0
-        self._max_steps = 100_000  # very long episodes — avoid reset/segfault
+        self._max_steps = 2000     # episodes end — forces learning from resets
         self._prev_distance = 0
-        self._last_image_full = None  # full res for stream
+        self._stuck_count = 0      # consecutive steps with near-zero speed
+        self._last_image_full = None
 
         # Action: [steer (-1 to 1), accel_brake (-1 to 1)]
         # negative = brake/reverse (to unstick from walls), positive = accelerate
@@ -96,6 +97,7 @@ class STKImageEnv(gym.Env):
             self._world.update()
             self._steps = 0
             self._prev_distance = 0
+            self._stuck_count = 0
             return self._get_obs(), {}
 
         race_config = pystk2.RaceConfig()
@@ -159,17 +161,22 @@ class STKImageEnv(gym.Env):
         else:
             reward -= 0.3
 
-        # Stuck penalty
-        if velocity < 0.3 and self._steps > 50:
-            reward -= 0.05
+        # Stuck detection — terminate episode if stuck too long
+        if velocity < 0.5:
+            self._stuck_count += 1
+        else:
+            self._stuck_count = 0
+
+        if self._stuck_count > 60:  # ~2 seconds stuck = episode over
+            reward -= 1.0
 
         # Clamp total reward
         reward = np.clip(reward, -1.0, 1.5)
 
         self._prev_distance = distance
 
-        terminated = False
-        truncated = False
+        terminated = self._stuck_count > 100  # ~3 seconds stuck = forced reset
+        truncated = self._steps >= self._max_steps
 
         info = {
             "distance": distance,
