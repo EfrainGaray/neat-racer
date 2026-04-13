@@ -20,7 +20,7 @@ import torch.nn as nn
 
 # ── Config ────────────────────────────────────────────────────────────────────
 WIDTH, HEIGHT = 1280, 720
-IMG_W, IMG_H = 160, 90      # observation image size (downscaled for CNN speed)
+IMG_W, IMG_H = 84, 84       # standard RL observation size (square for CNN)
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 9998
 CHECKPOINT_PATH = "/home/clawadmin/neat-racer/checkpoints/stk_sac"
@@ -147,33 +147,29 @@ class STKImageEnv(gym.Env):
         if progress < -100:
             progress += 1000  # crossed finish line
 
-        # Strong forward incentive, heavy backward penalty
+        # Reward — kept in [-1, 1] range for SAC stability
         if progress > 0:
-            reward = progress * 0.2
-            reward += velocity * 0.01  # speed bonus only when going forward
+            reward = min(progress * 0.05, 1.0)  # forward progress capped at 1.0
+            reward += min(velocity * 0.02, 0.3)  # speed bonus
         else:
-            reward = progress * 1.0  # 5x harsher penalty for going backward
+            reward = max(progress * 0.1, -1.0)  # backward penalty capped at -1.0
 
         if kart.is_on_road:
-            reward += 0.05
+            reward += 0.02
         else:
-            reward -= 1.0  # stronger off-road penalty
+            reward -= 0.3
+
+        # Stuck penalty
+        if velocity < 0.3 and self._steps > 50:
+            reward -= 0.05
+
+        # Clamp total reward
+        reward = np.clip(reward, -1.0, 1.5)
 
         self._prev_distance = distance
 
         terminated = False
         truncated = False
-
-        if kart.has_finished_race:
-            reward += 100
-            # Don't terminate — keep racing (avoids reset/segfault)
-
-        # Never truncate — infinite racing
-        # if self._steps >= self._max_steps:
-        #     truncated = True
-
-        if velocity < 0.3 and self._steps > 50:
-            reward -= 0.1
 
         info = {
             "distance": distance,
@@ -451,13 +447,13 @@ def main():
             verbose=1,
             device=device,
             learning_rate=3e-4,
-            buffer_size=50_000,
+            buffer_size=200_000,       # 4x bigger — CNN needs more samples
             batch_size=256,
-            learning_starts=1000,
+            learning_starts=5000,      # explore more before training
             tau=0.005,
             gamma=0.99,
             train_freq=4,
-            gradient_steps=1,
+            gradient_steps=2,          # 2 gradient steps per env step
             policy_kwargs={
                 "features_extractor_class": STKCnn,
                 "features_extractor_kwargs": {"features_dim": 256},
