@@ -20,6 +20,8 @@ export_presets.cfg
 # Secrets
 .env
 *.env
+bots/*_token.json
+bots/gcloud_token.json
 
 # OS
 .DS_Store
