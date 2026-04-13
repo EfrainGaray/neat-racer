@@ -401,7 +401,8 @@ class StreamCallback(BaseCallback):
         if self.num_timesteps > 0 and self.num_timesteps % 10_000 == 0:
             try:
                 self.model.save(CHECKPOINT_PATH)
-                print(f"[SAVE] Checkpoint at {self.num_timesteps:,} steps → {CHECKPOINT_PATH}", flush=True)
+                self.model.save_replay_buffer(CHECKPOINT_PATH + "_buffer")
+                print(f"[SAVE] Checkpoint + buffer at {self.num_timesteps:,} steps", flush=True)
             except Exception as e:
                 print(f"[SAVE] Error: {e}", flush=True)
 
@@ -444,7 +445,13 @@ def main():
                 },
             },
         )
-        print(f"[STK] Checkpoint loaded — continuing training", flush=True)
+        # Restore replay buffer if exists
+        buffer_file = CHECKPOINT_PATH + "_buffer.pkl"
+        if os.path.exists(buffer_file):
+            model.load_replay_buffer(buffer_file)
+            print(f"[STK] Checkpoint + replay buffer loaded ({model.replay_buffer.size()} experiences)", flush=True)
+        else:
+            print(f"[STK] Checkpoint loaded (no buffer — will re-explore)", flush=True)
     else:
         print(f"[STK] No checkpoint found — starting fresh", flush=True)
         os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
@@ -482,7 +489,11 @@ def main():
         print("\n[STK] Stopped", flush=True)
 
     model.save(CHECKPOINT_PATH)
-    print(f"[STK] Final checkpoint saved → {CHECKPOINT_PATH}", flush=True)
+    try:
+        model.save_replay_buffer(CHECKPOINT_PATH + "_buffer")
+    except Exception:
+        pass
+    print(f"[STK] Final checkpoint + buffer saved", flush=True)
     env.close()
     print("[STK] Done", flush=True)
 
