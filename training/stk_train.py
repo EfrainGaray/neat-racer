@@ -218,28 +218,34 @@ class StreamCallback(BaseCallback):
         # Get image from env
         try:
             env = self.training_env.envs[0]
-            image = env.render()
-            if image is not None and image.size > 0:
-                # Resize to stream resolution if needed
-                if image.shape[:2] != (HEIGHT, WIDTH):
-                    from PIL import Image
-                    img = Image.fromarray(image).resize((WIDTH, HEIGHT))
-                    image = np.array(img)
+            raw = env.unwrapped.render() if hasattr(env, 'unwrapped') else env.render()
+            if raw is not None and raw.size > 0:
+                from PIL import Image as PILImage
+                img = PILImage.fromarray(raw)
+                # Force RGB (drop alpha if RGBA)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                # Resize to exact stream resolution
+                if img.size != (WIDTH, HEIGHT):
+                    img = img.resize((WIDTH, HEIGHT), PILImage.BILINEAR)
+                image = np.array(img, dtype=np.uint8)
 
-                # Send to proxy
-                if self.proxy_sock:
-                    try:
-                        self.proxy_sock.sendall(image.tobytes())
-                    except OSError:
-                        self.proxy_sock = connect_proxy(retries=2, delay=1)
+                # Verify exact size before sending
+                expected = WIDTH * HEIGHT * 3
+                if image.nbytes == expected:
+                    if self.proxy_sock:
+                        try:
+                            self.proxy_sock.sendall(image.tobytes())
+                        except OSError:
+                            self.proxy_sock = connect_proxy(retries=2, delay=1)
 
-                # Save preview
-                if self.frame_count % 30 == 0:
-                    try:
-                        from PIL import Image
-                        Image.fromarray(image).save("/tmp/game_frame.jpg")
-                    except Exception:
-                        pass
+                    if self.frame_count % 30 == 0:
+                        try:
+                            PILImage.fromarray(image).save("/tmp/game_frame.jpg")
+                        except Exception:
+                            pass
+                elif self.frame_count % 300 == 0:
+                    print(f"[STREAM] Frame size mismatch: {image.shape} ({image.nbytes} != {expected})", flush=True)
         except Exception as e:
             if self.frame_count % 100 == 0:
                 print(f"[STREAM] Render error: {e}", flush=True)
