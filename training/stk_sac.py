@@ -23,6 +23,7 @@ WIDTH, HEIGHT = 1280, 720
 IMG_W, IMG_H = 160, 90      # observation image size (downscaled for CNN speed)
 PROXY_HOST = "127.0.0.1"
 PROXY_PORT = 9998
+CHECKPOINT_PATH = "/home/clawadmin/neat-racer/checkpoints/stk_sac"
 
 
 # ── Custom CNN Feature Extractor ──────────────────────────────────────────────
@@ -387,6 +388,14 @@ class StreamCallback(BaseCallback):
             except Exception:
                 pass
 
+        # Autosave model every 10k steps
+        if self.num_timesteps > 0 and self.num_timesteps % 10_000 == 0:
+            try:
+                self.model.save(CHECKPOINT_PATH)
+                print(f"[SAVE] Checkpoint at {self.num_timesteps:,} steps → {CHECKPOINT_PATH}", flush=True)
+            except Exception as e:
+                print(f"[SAVE] Error: {e}", flush=True)
+
         return True
 
 
@@ -412,25 +421,44 @@ def main():
     env = STKImageEnv(track=track, num_karts=1, laps=3)
     env = gym.wrappers.TimeLimit(env, max_episode_steps=3000)
 
-    model = SAC(
-        "CnnPolicy", env,
-        verbose=1,
-        device=device,
-        learning_rate=3e-4,
-        buffer_size=50_000,
-        batch_size=256,
-        learning_starts=1000,
-        tau=0.005,
-        gamma=0.99,
-        train_freq=4,
-        gradient_steps=1,
-        policy_kwargs={
-            "features_extractor_class": STKCnn,
-            "features_extractor_kwargs": {"features_dim": 256},
-            "net_arch": [256, 256],
-            "normalize_images": False,
-        },
-    )
+    # Try loading checkpoint, otherwise create new model
+    checkpoint_file = CHECKPOINT_PATH + ".zip"
+    if os.path.exists(checkpoint_file):
+        print(f"[STK] Restoring from checkpoint: {checkpoint_file}", flush=True)
+        model = SAC.load(
+            CHECKPOINT_PATH, env=env, device=device,
+            custom_objects={
+                "policy_kwargs": {
+                    "features_extractor_class": STKCnn,
+                    "features_extractor_kwargs": {"features_dim": 256},
+                    "net_arch": [256, 256],
+                    "normalize_images": False,
+                },
+            },
+        )
+        print(f"[STK] Checkpoint loaded — continuing training", flush=True)
+    else:
+        print(f"[STK] No checkpoint found — starting fresh", flush=True)
+        os.makedirs(os.path.dirname(CHECKPOINT_PATH), exist_ok=True)
+        model = SAC(
+            "CnnPolicy", env,
+            verbose=1,
+            device=device,
+            learning_rate=3e-4,
+            buffer_size=50_000,
+            batch_size=256,
+            learning_starts=1000,
+            tau=0.005,
+            gamma=0.99,
+            train_freq=4,
+            gradient_steps=1,
+            policy_kwargs={
+                "features_extractor_class": STKCnn,
+                "features_extractor_kwargs": {"features_dim": 256},
+                "net_arch": [256, 256],
+                "normalize_images": False,
+            },
+        )
 
     callback = StreamCallback()
     callback.proxy_sock = proxy_sock
@@ -444,7 +472,8 @@ def main():
     except KeyboardInterrupt:
         print("\n[STK] Stopped", flush=True)
 
-    model.save("/tmp/stk_sac_model")
+    model.save(CHECKPOINT_PATH)
+    print(f"[STK] Final checkpoint saved → {CHECKPOINT_PATH}", flush=True)
     env.close()
     print("[STK] Done", flush=True)
 
