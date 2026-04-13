@@ -226,6 +226,92 @@ class StreamCallback(BaseCallback):
     def _on_training_start(self):
         pass
 
+    def _draw_hud(self, img, infos):
+        """Draw training stats overlay on PIL image."""
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+
+        elapsed = time.time() - self.start_time
+        mins, secs = int(elapsed // 60), int(elapsed % 60)
+        hours = int(elapsed // 3600)
+
+        # Current speed/distance from infos
+        cur_speed = 0
+        cur_dist = 0
+        cur_laps = 0
+        on_road = True
+        for info in (infos or []):
+            if info:
+                cur_speed = info.get("velocity", 0)
+                cur_dist = info.get("distance", 0)
+                cur_laps = info.get("laps", 0)
+                on_road = info.get("on_road", True)
+
+        # Try loading a monospace font
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf", 16)
+            font_sm = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansMono-Regular.ttf", 13)
+            font_title = ImageFont.truetype("/usr/share/fonts/google-noto/NotoSansMono-Bold.ttf", 14)
+        except Exception:
+            font = ImageFont.load_default()
+            font_sm = font
+            font_title = font
+
+        # Panel background
+        panel_w, panel_h = 260, 250
+        panel_x, panel_y = 16, 16
+        overlay = PILImage.new('RGBA', img.size, (0, 0, 0, 0))
+        overlay_draw = ImageDraw.Draw(overlay)
+        overlay_draw.rounded_rectangle(
+            [panel_x, panel_y, panel_x + panel_w, panel_y + panel_h],
+            radius=8, fill=(8, 6, 18, 200)
+        )
+        # Border
+        overlay_draw.rounded_rectangle(
+            [panel_x, panel_y, panel_x + panel_w, panel_y + panel_h],
+            radius=8, outline=(0, 255, 255, 50), width=1
+        )
+        img = PILImage.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+        cx = panel_x + 14
+        cy = panel_y + 12
+
+        # Title
+        draw.text((cx, cy), "SAC + CNN  |  GPU", fill=(140, 0, 255), font=font_title)
+        cy += 22
+
+        # Separator
+        draw.line([(cx, cy), (panel_x + panel_w - 14, cy)], fill=(255, 255, 255, 30), width=1)
+        cy += 8
+
+        lines = [
+            ("STEPS", f"{self.num_timesteps:,}", (0, 255, 255)),
+            ("BEST DIST", f"{self.best_distance:.0f}", (255, 200, 50)),
+            ("BEST LAPS", f"{self.best_laps}", (255, 0, 128) if self.best_laps > 0 else (100, 110, 120)),
+            ("SPEED", f"{cur_speed:.1f}", (30, 215, 96) if cur_speed > 2 else (239, 68, 68)),
+            ("DISTANCE", f"{cur_dist:.0f}", (250, 249, 246)),
+            ("ON ROAD", "YES" if on_road else "OFF", (30, 215, 96) if on_road else (239, 68, 68)),
+            ("TIME", f"{hours:02d}:{mins%60:02d}:{secs:02d}", (100, 110, 120)),
+        ]
+
+        for label, value, color in lines:
+            draw.text((cx, cy), label, fill=(138, 143, 152), font=font_sm)
+            val_w = draw.textlength(value, font=font)
+            draw.text((panel_x + panel_w - 14 - val_w, cy - 1), value, fill=color, font=font)
+            cy += 26
+
+        # Bottom tag
+        tag = "NEAT RACER — AI Learns from Pixels"
+        draw.text((16, HEIGHT - 24), tag, fill=(60, 65, 75), font=font_sm)
+
+        # FPS indicator
+        fps_text = f"{self.frame_count / max(elapsed, 1):.0f} fps"
+        fw = draw.textlength(fps_text, font=font_sm)
+        draw.text((WIDTH - fw - 16, HEIGHT - 24), fps_text, fill=(60, 65, 75), font=font_sm)
+
+        return img
+
     def _on_step(self) -> bool:
         self.frame_count += 1
 
@@ -253,8 +339,11 @@ class StreamCallback(BaseCallback):
                     img = img.convert('RGB')
                 if img.size != (WIDTH, HEIGHT):
                     img = img.resize((WIDTH, HEIGHT), PILImage.BILINEAR)
-                image = np.array(img, dtype=np.uint8)
 
+                # Draw HUD overlay
+                img = self._draw_hud(img, infos)
+
+                image = np.array(img, dtype=np.uint8)
                 expected = WIDTH * HEIGHT * 3
                 if image.nbytes == expected and self.proxy_sock:
                     try:
