@@ -400,9 +400,9 @@ def main():
     proxy_sock = connect_proxy()
 
     # Init pystk2
-    gfx = pystk2.GraphicsConfig.sd()
-    gfx.screen_width = 640
-    gfx.screen_height = 360
+    gfx = pystk2.GraphicsConfig.hd()
+    gfx.screen_width = 1280
+    gfx.screen_height = 720
     pystk2.init(gfx)
 
     tracks = pystk2.list_tracks()
