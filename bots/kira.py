@@ -486,14 +486,30 @@ def process_vote(message: str, username: str, platform: str) -> bool:
     return True
 
 
-# ── Pre-generated welcomes (no LLM cost) ─────────────────────────────
-WELCOMES = [
-    "¡Hola {user}! ¡Bienvenido al stream! Aquí Kira aprendiendo SuperTuxKart con IA.",
-    "¡{user}! ¡Qué gusto verte! Pásale, aquí entrenando en Lighthouse.",
-    "¡Bienvenido {user}! Soy Kira, una IA aprendiendo a correr carreras. ¡Escríbeme lo que quieras!",
-    "¡Hey {user}! ¡Gracias por llegar! Pregúntame lo que quieras sobre el entrenamiento.",
-    "¡{user} en el chat! ¡Bienvenido! Aquí pixel por pixel aprendiendo a manejar.",
-]
+# ── Pre-generated welcomes per platform (no LLM cost) ────────────────
+WELCOMES = {
+    "kick": [
+        "¡Hola {user}! ¡Bienvenido a Kick! Gracias por pasarte al stream, aquí Kira aprendiendo SuperTuxKart con IA en vivo.",
+        "¡{user} llegó a Kick! ¡Qué gusto! Pásale, aquí entrenando en la pista Lighthouse con mi red neuronal.",
+        "¡Hey {user}! ¡Bienvenido al stream en Kick! Soy Kira, una IA aprendiendo a correr carreras. ¡Escríbeme lo que quieras!",
+        "¡{user} en el chat de Kick! Gracias por estar aquí. Pregúntame lo que quieras sobre el entrenamiento.",
+        "¡Hola {user}! ¡Bienvenido a Kick! Aquí pixel por pixel aprendiendo a manejar un kart con inteligencia artificial.",
+    ],
+    "twitch": [
+        "¡Hola {user}! ¡Bienvenido a Twitch! Gracias por mirar, aquí Kira aprendiendo SuperTuxKart con IA en vivo.",
+        "¡{user} llegó al stream de Twitch! ¡Qué gusto! Pásale, estoy entrenando en Lighthouse con SAC y CNN.",
+        "¡Hey {user}! ¡Bienvenido al canal de Twitch! Soy Kira, una IA aprendiendo a correr carreras. ¡Hablemos!",
+        "¡{user} en el chat de Twitch! Gracias por pasarte. Pregúntame lo que quieras sobre cómo aprende una IA.",
+        "¡Hola {user}! ¡Bienvenido a Twitch! Aquí entrenando en vivo, pixel por pixel. ¡Escríbeme en el chat!",
+    ],
+    "youtube": [
+        "¡Hola {user}! ¡Bienvenido a YouTube! Gracias por mirar el stream, aquí Kira aprendiendo SuperTuxKart con IA.",
+        "¡{user} llegó al stream de YouTube! ¡Qué gusto! Pásale, entrenando en la pista Lighthouse en vivo.",
+        "¡Hey {user}! ¡Bienvenido al canal de YouTube! Soy Kira, IA aprendiendo a correr carreras. ¡Déjame un comentario!",
+        "¡{user} en el chat de YouTube! Gracias por estar aquí. Pregúntame lo que quieras sobre el entrenamiento.",
+        "¡Hola {user}! ¡Bienvenido a YouTube! Aquí pixel por pixel aprendiendo a manejar con inteligencia artificial.",
+    ],
+}
 
 
 # ── Chat response ─────────────────────────────────────────────────────
@@ -522,9 +538,10 @@ async def respond_to_chat(username: str, message: str,
         print(f"[CHAT] Spam ignored from {username}", flush=True)
         return
 
-    # New user → pre-generated welcome only, no LLM
+    # New user → pre-generated welcome with name + platform, no LLM
     if is_new:
-        reply = random.choice(WELCOMES).format(user=username)
+        templates = WELCOMES.get(platform, WELCOMES["kick"])
+        reply = random.choice(templates).format(user=username)
         _user_cooldown[username] = time.time()
         _last_response_time = time.time()
         await broadcast(reply, speak_it=True)
