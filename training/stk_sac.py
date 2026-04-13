@@ -476,6 +476,7 @@ def main():
         model.learn(
             total_timesteps=10_000_000,
             callback=callback,
+            reset_num_timesteps=False,
         )
     except KeyboardInterrupt:
         print("\n[STK] Stopped", flush=True)
