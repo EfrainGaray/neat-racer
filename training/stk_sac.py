@@ -60,7 +60,7 @@ class STKImageEnv(gym.Env):
 
     metadata = {"render_modes": ["rgb_array"]}
 
-    def __init__(self, track="lighthouse", num_karts=1, laps=3):
+    def __init__(self, track="lighthouse", num_karts=1, laps=99):
         super().__init__()
         self.track_name = track
         self.num_karts = num_karts
@@ -68,7 +68,7 @@ class STKImageEnv(gym.Env):
         self._race = None
         self._world = None
         self._steps = 0
-        self._max_steps = 3000
+        self._max_steps = 100_000  # very long episodes — avoid reset/segfault
         self._prev_distance = 0
         self._last_image_full = None  # full res for stream
 
@@ -90,19 +90,13 @@ class STKImageEnv(gym.Env):
         super().reset(seed=seed)
 
         if self._race is not None:
-            # Use restart instead of stop+start — avoids segfault
-            try:
-                self._race.restart()
-                self._race.step()
-                self._world = pystk2.WorldState()
-                self._world.update()
-                self._steps = 0
-                self._prev_distance = 0
-                obs = self._get_obs()
-                self._last_image_full = None
-                return obs, {}
-            except Exception:
-                pass
+            # Race already running — just restart it (avoids segfault from stop+start)
+            self._race.restart()
+            self._race.step()
+            self._world.update()
+            self._steps = 0
+            self._prev_distance = 0
+            return self._get_obs(), {}
 
         race_config = pystk2.RaceConfig()
         race_config.track = self.track_name
@@ -168,10 +162,11 @@ class STKImageEnv(gym.Env):
 
         if kart.has_finished_race:
             reward += 100
-            terminated = True
+            # Don't terminate — keep racing (avoids reset/segfault)
 
-        if self._steps >= self._max_steps:
-            truncated = True
+        # Never truncate — infinite racing
+        # if self._steps >= self._max_steps:
+        #     truncated = True
 
         if velocity < 0.3 and self._steps > 50:
             reward -= 0.1
@@ -426,8 +421,7 @@ def main():
     track = "lighthouse" if "lighthouse" in tracks else tracks[0]
     print(f"[STK] Track: {track} | Obs: {IMG_W}x{IMG_H} image → CNN → GPU", flush=True)
 
-    env = STKImageEnv(track=track, num_karts=1, laps=3)
-    env = gym.wrappers.TimeLimit(env, max_episode_steps=3000)
+    env = STKImageEnv(track=track, num_karts=1, laps=99)
 
     # Try loading checkpoint, otherwise create new model
     checkpoint_file = CHECKPOINT_PATH + ".zip"
