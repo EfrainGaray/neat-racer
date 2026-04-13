@@ -215,6 +215,17 @@ class StreamCallback(BaseCallback):
     def _on_step(self) -> bool:
         self.frame_count += 1
 
+        # Only render every 2 steps — training runs faster, stream gets ~30fps
+        if self.frame_count % 2 != 0:
+            # Still update stats
+            infos = self.locals.get("infos", [])
+            for info in infos:
+                d = info.get("distance", 0)
+                l = info.get("laps", 0)
+                if d > self.best_distance:
+                    self.best_distance = d
+            return True
+
         # Get image from env
         try:
             env = self.training_env.envs[0]
@@ -281,10 +292,10 @@ def main():
 
     proxy_sock = connect_proxy()
 
-    # Init pystk2 graphics before creating env
-    gfx = pystk2.GraphicsConfig.hd()
-    gfx.screen_width = WIDTH
-    gfx.screen_height = HEIGHT
+    # Init pystk2 graphics — SD for speed, renders at full res for stream
+    gfx = pystk2.GraphicsConfig.sd()
+    gfx.screen_width = 640
+    gfx.screen_height = 360
     pystk2.init(gfx)
 
     tracks = pystk2.list_tracks()
@@ -292,15 +303,15 @@ def main():
     track = "lighthouse" if "lighthouse" in tracks else tracks[0]
     print(f"[STK] Using: {track}", flush=True)
 
-    env = STKEnv(track=track, num_karts=1, laps=1)
-    env = gym.wrappers.TimeLimit(env, max_episode_steps=1500)
+    env = STKEnv(track=track, num_karts=1, laps=3)
+    env = gym.wrappers.TimeLimit(env, max_episode_steps=3000)
 
     model = PPO(
         "MlpPolicy", env, verbose=1, device="cpu",
-        learning_rate=3e-4, n_steps=1024, batch_size=128,
-        n_epochs=4, gamma=0.99, gae_lambda=0.95,
-        clip_range=0.2, ent_coef=0.01,
-        policy_kwargs={"net_arch": [256, 256]},
+        learning_rate=3e-4, n_steps=2048, batch_size=256,
+        n_epochs=10, gamma=0.995, gae_lambda=0.95,
+        clip_range=0.2, ent_coef=0.005,
+        policy_kwargs={"net_arch": [512, 512, 256]},
     )
 
     callback = StreamCallback()
