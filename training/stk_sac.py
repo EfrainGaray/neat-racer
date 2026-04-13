@@ -328,9 +328,18 @@ class StreamCallback(BaseCallback):
                 if l > self.best_laps:
                     self.best_laps = l
 
-        # Render every 2 steps
+        # Render every 2 steps + throttle to ~30fps real-time for natural stream
         if self.frame_count % 2 != 0:
             return True
+
+        # Real-time sync — wait to maintain ~30fps
+        now = time.time()
+        if hasattr(self, '_last_render_time'):
+            elapsed = now - self._last_render_time
+            target = 1.0 / 30  # 30fps
+            if elapsed < target:
+                time.sleep(target - elapsed)
+        self._last_render_time = time.time()
 
         try:
             env = self.training_env.envs[0]
