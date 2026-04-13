@@ -71,9 +71,10 @@ class STKImageEnv(gym.Env):
         self._prev_distance = 0
         self._last_image_full = None  # full res for stream
 
-        # Action: [steer, accel_brake] continuous
+        # Action: [steer (-1 to 1), acceleration (0 to 1)]
+        # No brake action — forces forward movement, learns steering first
         self.action_space = spaces.Box(
-            low=np.array([-1.0, -1.0], dtype=np.float32),
+            low=np.array([-1.0, 0.0], dtype=np.float32),
             high=np.array([1.0, 1.0], dtype=np.float32),
         )
 
@@ -120,12 +121,8 @@ class STKImageEnv(gym.Env):
 
         pystk_action = pystk2.Action()
         pystk_action.steer = np.clip(steer, -1, 1)
-        if accel_brake >= 0:
-            pystk_action.acceleration = accel_brake
-            pystk_action.brake = False
-        else:
-            pystk_action.acceleration = 0
-            pystk_action.brake = True
+        pystk_action.acceleration = max(0.3, accel_brake)  # minimum 30% throttle always
+        pystk_action.brake = False
         pystk_action.drift = abs(steer) > 0.8
         pystk_action.nitro = accel_brake > 0.9
 
@@ -141,14 +138,19 @@ class STKImageEnv(gym.Env):
 
         progress = distance - self._prev_distance
         if progress < -100:
-            progress += 1000
-        reward = progress * 0.1
-        reward += velocity * 0.005
+            progress += 1000  # crossed finish line
+
+        # Strong forward incentive, heavy backward penalty
+        if progress > 0:
+            reward = progress * 0.2
+            reward += velocity * 0.01  # speed bonus only when going forward
+        else:
+            reward = progress * 1.0  # 5x harsher penalty for going backward
 
         if kart.is_on_road:
             reward += 0.05
         else:
-            reward -= 0.5
+            reward -= 1.0  # stronger off-road penalty
 
         self._prev_distance = distance
 
