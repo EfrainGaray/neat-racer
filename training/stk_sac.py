@@ -72,10 +72,10 @@ class STKImageEnv(gym.Env):
         self._prev_distance = 0
         self._last_image_full = None  # full res for stream
 
-        # Action: [steer (-1 to 1), acceleration (0 to 1)]
-        # No brake action — forces forward movement, learns steering first
+        # Action: [steer (-1 to 1), accel_brake (-1 to 1)]
+        # negative = brake/reverse (to unstick from walls), positive = accelerate
         self.action_space = spaces.Box(
-            low=np.array([-1.0, 0.0], dtype=np.float32),
+            low=np.array([-1.0, -1.0], dtype=np.float32),
             high=np.array([1.0, 1.0], dtype=np.float32),
         )
 
@@ -124,8 +124,12 @@ class STKImageEnv(gym.Env):
 
         pystk_action = pystk2.Action()
         pystk_action.steer = np.clip(steer, -1, 1)
-        pystk_action.acceleration = max(0.3, accel_brake)  # minimum 30% throttle always
-        pystk_action.brake = False
+        if accel_brake >= 0:
+            pystk_action.acceleration = max(0.15, accel_brake)  # minimum 15% throttle
+            pystk_action.brake = False
+        else:
+            pystk_action.acceleration = 0
+            pystk_action.brake = True  # can reverse to unstick from walls
         pystk_action.drift = abs(steer) > 0.8
         pystk_action.nitro = accel_brake > 0.9
 
