@@ -161,21 +161,24 @@ class STKImageEnv(gym.Env):
         else:
             reward -= 0.3
 
-        # Stuck detection — terminate episode if stuck too long
-        if velocity < 0.5:
+        # Stuck detection — based on actual progress, not velocity
+        # (kart can spin wheels against wall with velocity > 0 but zero progress)
+        if abs(progress) < 0.1 or not kart.is_on_road:
             self._stuck_count += 1
         else:
             self._stuck_count = 0
 
-        if self._stuck_count > 60:  # ~2 seconds stuck = episode over
+        if self._stuck_count > 30:  # ~1 second no progress
+            reward -= 0.5
+        if self._stuck_count > 60:  # ~2 seconds
             reward -= 1.0
 
         # Clamp total reward
-        reward = np.clip(reward, -1.0, 1.5)
+        reward = np.clip(reward, -1.5, 1.5)
 
         self._prev_distance = distance
 
-        terminated = self._stuck_count > 100  # ~3 seconds stuck = forced reset
+        terminated = self._stuck_count > 90   # 3 seconds no progress = episode over
         truncated = self._steps >= self._max_steps
 
         info = {
