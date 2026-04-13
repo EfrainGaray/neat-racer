@@ -460,7 +460,7 @@ def main():
             verbose=1,
             device=device,
             learning_rate=3e-4,
-            buffer_size=200_000,       # 4x bigger — CNN needs more samples
+            buffer_size=30_000,        # ~1.2GB RAM with 84x84 images
             batch_size=256,
             learning_starts=5000,      # explore more before training
             tau=0.005,
